@@ -46,6 +46,7 @@ document.addEventListener("DOMContentLoaded", function(event) {
     normalizeGain.connect(globalAnalyser);
 
     let currentWaveform = 'sine';
+    let currentMode = 'Additive';
     const memFadeSec = 1; // seconds for color memory fade
     const memMap = {}; // map key code -> color overlay element
 
@@ -192,6 +193,14 @@ document.addEventListener("DOMContentLoaded", function(event) {
         });
     }
 
+    // Add listener to synthesis selector
+    const synthesisSelect = document.querySelector('select[name="synthesis"]');
+    if (synthesisSelect) {
+        synthesisSelect.addEventListener('change', (e) => {
+            currentMode = e.target.value;
+        });
+    }
+
     // Add listeners for play/stop buttons - EXPERIMENTAL
     const playButton = document.querySelector('#playButton');
     const stopButton = document.querySelector('#stopButton');
@@ -277,25 +286,6 @@ document.addEventListener("DOMContentLoaded", function(event) {
                 oscillator1.stop(releaseStartTime + releaseTime + 0.01);
                 oscillator2.stop(releaseStartTime + releaseTime + 0.01);
                 oscillator3.stop(releaseStartTime + releaseTime + 0.01);
-
-                //gain1.gain.setValueAtTime(0.3, now);
-                //gain2.gain.setValueAtTime(0.3, now);
-                //gain3.gain.setValueAtTime(0.3, now);
-
-                //gain1.gain.linearRampToValueAtTime(0, now + 0.1);
-                //gain2.gain.linearRampToValueAtTime(0, now + 0.1);
-                //gain3.gain.linearRampToValueAtTime(0, now + 0.1);
-
-                //oscillator1.stop(now + 0.1);
-                //oscillator2.stop(now + 0.1);
-                //oscillator3.stop(now + 0.1);
-
-               //oscillator1 = null;
-                //oscillator2 = null;
-                //oscillator3 = null;
-                //gain1 = null;
-                //gain2 = null;
-                //gain3 = null;
                 
                 playButton.disabled = false;
                 stopButton.disabled = true;
@@ -403,9 +393,91 @@ document.addEventListener("DOMContentLoaded", function(event) {
         }
     }
 
-    // we need a way to playNote(key), which will actually start the sound. For this, we start an oscillator,
-    // set the desired properties, and connect the new oscillator to the the audioCtx.destination
+    // Dispatcher function to route to the appropriate synthesis mode
     function playNote(key) {
+        if (currentMode === 'Additive') {
+            playNoteAdditive(key);
+        } else if (currentMode === 'AM') {
+            playNoteAM(key);
+        } else if (currentMode === 'FM') {
+            playNoteFM(key);
+        } else if (currentMode === 'None') {
+            playNoteNone(key);
+        }
+    }
+
+    // ============================================
+    // ADDITIVE SYNTHESIS
+    // ============================================
+    function playNoteAdditive(key) {
+        // TODO: Implement additive oscillator mode
+        
+        const now = audioCtx.currentTime;
+        const noteGain = audioCtx.createGain();
+        noteGain.gain.setValueAtTime(0.3, now);
+        noteGain.connect(globalGain);
+        
+        // Placeholder: store dummy oscillator for now
+        const osc = audioCtx.createOscillator();
+        osc.frequency.setValueAtTime(keyboardFrequencyMap[key], now);
+        osc.type = currentWaveform;
+        osc.connect(noteGain);
+        osc.start();
+        
+        activeOscillators[key] = {osc, gain: noteGain, sustainLevel: 0.3}
+        updateNormalization();
+    }
+
+    // ============================================
+    // AM SYNTHESIS
+    // ============================================
+    function playNoteAM(key) {
+        // TODO: Implement AM (Amplitude Modulation) synthesis
+        // Should create carrier and modulator oscillators
+        
+        const now = audioCtx.currentTime;
+        const noteGain = audioCtx.createGain();
+        noteGain.gain.setValueAtTime(0.3, now);
+        noteGain.connect(globalGain);
+        
+        // Placeholder: store dummy oscillator for now
+        const osc = audioCtx.createOscillator();
+        osc.frequency.setValueAtTime(keyboardFrequencyMap[key], now);
+        osc.type = currentWaveform;
+        osc.connect(noteGain);
+        osc.start();
+        
+        activeOscillators[key] = {osc, gain: noteGain, sustainLevel: 0.3}
+        updateNormalization();
+    }
+
+    // ============================================
+    // FM SYNTHESIS
+    // ============================================
+    function playNoteFM(key) {
+        // TODO: Implement FM (Frequency Modulation) synthesis
+        // Should create carrier and modulator oscillators
+        
+        const now = audioCtx.currentTime;
+        const noteGain = audioCtx.createGain();
+        noteGain.gain.setValueAtTime(0.3, now);
+        noteGain.connect(globalGain);
+        
+        // Placeholder: store dummy oscillator for now
+        const osc = audioCtx.createOscillator();
+        osc.frequency.setValueAtTime(keyboardFrequencyMap[key], now);
+        osc.type = currentWaveform;
+        osc.connect(noteGain);
+        osc.start();
+        
+        activeOscillators[key] = {osc, gain: noteGain, sustainLevel: 0.3}
+        updateNormalization();
+    }
+
+    // ============================================
+    // NONE SYNTHESIS (Simple single oscillator)
+    // ============================================
+    function playNoteNone(key) {
         // ADSR parameters
         const attackTime = 0.2;
         const decayTime = 0.3;
