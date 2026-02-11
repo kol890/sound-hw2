@@ -49,6 +49,11 @@ document.addEventListener("DOMContentLoaded", function(event) {
     const memFadeSec = 1; // seconds for color memory fade
     const memMap = {}; // map key code -> color overlay element
 
+    // Simple oscillator for additive synthesis experiments EXPERIMENTAL
+    let simpleOscillator = null;
+    let simpleGain = null;
+    const cFrequency = 261.625565300598634; // C
+
     function freqToHue(freq) {
         // map frequency (log) into 0..360 hue range using expected piano range
         const minF = 130.8127826502993; // C3
@@ -184,6 +189,117 @@ document.addEventListener("DOMContentLoaded", function(event) {
     if (waveformSelect) {
         waveformSelect.addEventListener('change', (e) => {
             currentWaveform = e.target.value;
+        });
+    }
+
+    // Add listeners for play/stop buttons - EXPERIMENTAL
+    const playButton = document.querySelector('#playButton');
+    const stopButton = document.querySelector('#stopButton');
+
+    if (playButton) {
+        playButton.addEventListener('click', () => {
+            if (!simpleOscillator) {
+                const now = audioCtx.currentTime;
+                
+                // Create oscillator and gain nodes
+                oscillator1 = audioCtx.createOscillator();
+                oscillator2 = audioCtx.createOscillator();
+                oscillator3 = audioCtx.createOscillator();
+                gain1 = audioCtx.createGain();
+                gain2 = audioCtx.createGain();
+                gain3 = audioCtx.createGain();
+                
+                oscillator1.frequency.setValueAtTime(cFrequency, now);
+                oscillator1.type = currentWaveform;
+
+                oscillator2.frequency.setValueAtTime(cFrequency * 2, now);
+                oscillator2.type = currentWaveform;
+
+                oscillator3.frequency.setValueAtTime(cFrequency * 3, now);
+                oscillator3.type = currentWaveform;
+                
+                // Set gain, control individual amplitude
+                gain1.gain.setValueAtTime(0.75, now);
+                gain2.gain.setValueAtTime(0.2, now);
+                gain3.gain.setValueAtTime(0.05, now);
+                
+                // Connect the oscillators
+                oscillator1.connect(gain1);
+                oscillator2.connect(gain2);
+                oscillator3.connect(gain3);
+
+                // Final gain
+                envelope = audioCtx.createGain();
+                envelope.gain.setValueAtTime(0, now);
+                
+                gain1.connect(envelope);
+                gain2.connect(envelope);
+                gain3.connect(envelope);
+                envelope.connect(audioCtx.destination);
+
+
+                // Start the oscillators
+                oscillator1.start();
+                oscillator2.start();
+                oscillator3.start();
+
+                //ADSR envelope
+                const attackTime = 0.2;
+                const decayTime = 0.3;
+                const sustainLevel = 0.3;
+                const maxGain = 0.4;
+
+                envelope.gain.setTargetAtTime(maxGain, now, attackTime);
+                envelope.gain.setTargetAtTime(sustainLevel, now + attackTime, decayTime);
+
+                playButton.disabled = true;
+                stopButton.disabled = false;
+            }
+        });
+    }
+
+    if (stopButton) {
+        stopButton.addEventListener('click', () => {
+            if (oscillator1) {
+                const now = audioCtx.currentTime;
+                
+                // Release
+                const releaseTime = 0.12;
+                const releaseStartTime = audioCtx.currentTime;
+
+                // Cancel any pending automations (attack/decay) to avoid clicks
+                envelope.gain.cancelScheduledValues(releaseStartTime);
+
+                // Release: linear ramp from current to 0
+                envelope.gain.linearRampToValueAtTime(0, releaseStartTime + releaseTime);
+
+                // Stop oscillator just after release completes
+                oscillator1.stop(releaseStartTime + releaseTime + 0.01);
+                oscillator2.stop(releaseStartTime + releaseTime + 0.01);
+                oscillator3.stop(releaseStartTime + releaseTime + 0.01);
+
+                //gain1.gain.setValueAtTime(0.3, now);
+                //gain2.gain.setValueAtTime(0.3, now);
+                //gain3.gain.setValueAtTime(0.3, now);
+
+                //gain1.gain.linearRampToValueAtTime(0, now + 0.1);
+                //gain2.gain.linearRampToValueAtTime(0, now + 0.1);
+                //gain3.gain.linearRampToValueAtTime(0, now + 0.1);
+
+                //oscillator1.stop(now + 0.1);
+                //oscillator2.stop(now + 0.1);
+                //oscillator3.stop(now + 0.1);
+
+               //oscillator1 = null;
+                //oscillator2 = null;
+                //oscillator3 = null;
+                //gain1 = null;
+                //gain2 = null;
+                //gain3 = null;
+                
+                playButton.disabled = false;
+                stopButton.disabled = true;
+            }
         });
     }
 

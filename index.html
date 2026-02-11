@@ -14,6 +14,18 @@
         <div class="container">
             <div class="keyboard"></div>
             <div class="settingsBar">
+                <div class="left">
+                    <span>Current synthesis: </span>
+                    <select name="waveform">
+                        <option value="sine" selected>Additive</option>
+                        <option value="square">AM</option>
+                        <option value="sawtooth">FM</option>
+                    </select>
+                    <div>
+                        <button id="playButton">Play C</button>
+                        <button id="stopButton" disabled>Stop</button>
+                    </div>
+                </div>
                 <div class="right">
                     <span>Current waveform: </span>
                     <select name="waveform">

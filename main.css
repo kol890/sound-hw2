@@ -2,7 +2,7 @@
   overflow-x: scroll;
   overflow-y: hidden;
   width: 660px;
-  height: 120px;
+  height: 200px;
   white-space: nowrap;
   margin: 10px;
 }
@@ -84,6 +84,22 @@
 }
 
 .right input {
+  vertical-align: baseline;
+}
+
+.left {
+  width: 50%;
+  position: absolute;
+  left: 0;
+  display: table-cell;
+  vertical-align: middle;
+}
+
+.left span {
+  vertical-align: middle;
+}
+
+.left input {
   vertical-align: baseline;
 }
 
