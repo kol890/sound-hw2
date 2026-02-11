@@ -50,9 +50,8 @@ document.addEventListener("DOMContentLoaded", function(event) {
     const memFadeSec = 1; // seconds for color memory fade
     const memMap = {}; // map key code -> color overlay element
 
-    // Simple oscillator for additive synthesis experiments EXPERIMENTAL
+    // Simple oscillator for synthesis experiments EXPERIMENTAL
     let simpleOscillator = null;
-    let simpleGain = null;
     const cFrequency = 261.625565300598634; // C
 
     function freqToHue(freq) {
@@ -229,47 +228,35 @@ document.addEventListener("DOMContentLoaded", function(event) {
             if (!simpleOscillator) {
                 const now = audioCtx.currentTime;
                 
-                // Create oscillator and gain nodes
-                oscillator1 = audioCtx.createOscillator();
-                oscillator2 = audioCtx.createOscillator();
-                oscillator3 = audioCtx.createOscillator();
-                gain1 = audioCtx.createGain();
-                gain2 = audioCtx.createGain();
-                gain3 = audioCtx.createGain();
+                // Create oscillator, modutor, and gain nodes
+                carrier = audioCtx.createOscillator();
+                modulator = audioCtx.createOscillator();
                 
-                oscillator1.frequency.setValueAtTime(cFrequency, now);
-                oscillator1.type = currentWaveform;
+                carrier.frequency.value = cFrequency;
+                carrier.type = currentWaveform;
 
-                oscillator2.frequency.setValueAtTime(cFrequency * 2, now);
-                oscillator2.type = currentWaveform;
+                modulator.frequency.value = cFrequency * 0.5; // modulator at half the frequency of carrier for audible effect
+                modulator.type = currentWaveform;
 
-                oscillator3.frequency.setValueAtTime(cFrequency * 3, now);
-                oscillator3.type = currentWaveform;
+                depth = audioCtx.createGain();
+                depth.gain.value = 0.5;
+                modulated = audioCtx.createGain();
+                modulated.gain.value = 1.0 - depth.gain.value;
+
                 
-                // Set gain, control individual amplitude
-                gain1.gain.setValueAtTime(0.75, now);
-                gain2.gain.setValueAtTime(0.2, now);
-                gain3.gain.setValueAtTime(0.05, now);
-                
-                // Connect the oscillators
-                oscillator1.connect(gain1);
-                oscillator2.connect(gain2);
-                oscillator3.connect(gain3);
+                modulator.connect(depth).connect(modulated.gain);
+                carrier.connect(modulated);
 
-                // Final gain
+                //ADSR envelope
                 envelope = audioCtx.createGain();
                 envelope.gain.setValueAtTime(0, now);
                 
-                gain1.connect(envelope);
-                gain2.connect(envelope);
-                gain3.connect(envelope);
-                envelope.connect(audioCtx.destination);
-
+                modulated.connect(envelope);
+                envelope.connect(globalGain);
 
                 // Start the oscillators
-                oscillator1.start();
-                oscillator2.start();
-                oscillator3.start();
+                carrier.start();
+                modulator.start();
 
                 //ADSR envelope
                 const attackTime = 0.2;
@@ -288,7 +275,7 @@ document.addEventListener("DOMContentLoaded", function(event) {
 
     if (stopButton) {
         stopButton.addEventListener('click', () => {
-            if (oscillator1) {
+            if (carrier && modulator && envelope) {
                 const now = audioCtx.currentTime;
                 
                 // Release
@@ -302,9 +289,8 @@ document.addEventListener("DOMContentLoaded", function(event) {
                 envelope.gain.linearRampToValueAtTime(0, releaseStartTime + releaseTime);
 
                 // Stop oscillator just after release completes
-                oscillator1.stop(releaseStartTime + releaseTime + 0.01);
-                oscillator2.stop(releaseStartTime + releaseTime + 0.01);
-                oscillator3.stop(releaseStartTime + releaseTime + 0.01);
+                modulator.stop(releaseStartTime + releaseTime + 0.01);
+                carrier.stop(releaseStartTime + releaseTime + 0.01);
                 
                 playButton.disabled = false;
                 stopButton.disabled = true;
@@ -503,21 +489,47 @@ document.addEventListener("DOMContentLoaded", function(event) {
     // ============================================
     function playNoteAM(key) {
         // TODO: Implement AM (Amplitude Modulation) synthesis
-        // Should create carrier and modulator oscillators
-        
         const now = audioCtx.currentTime;
-        const noteGain = audioCtx.createGain();
-        noteGain.gain.setValueAtTime(0.3, now);
-        noteGain.connect(globalGain);
-        
-        // Placeholder: store dummy oscillator for now
-        const osc = audioCtx.createOscillator();
-        osc.frequency.setValueAtTime(keyboardFrequencyMap[key], now);
-        osc.type = currentWaveform;
-        osc.connect(noteGain);
-        osc.start();
-        
-        activeOscillators[key] = {osc, gain: noteGain, sustainLevel: 0.3}
+                
+        // Create carrier, modutor, and gain nodes
+        carrier = audioCtx.createOscillator();
+        modulator = audioCtx.createOscillator();
+                
+        carrier.frequency.value = keyboardFrequencyMap[key];
+        carrier.type = currentWaveform;
+        modulator.frequency.value = keyboardFrequencyMap[key] * 0.5; // modulator at half the frequency of carrier for audible effect
+        modulator.type = currentWaveform;
+
+        depth = audioCtx.createGain();
+        depth.gain.value = 0.5;
+        modulated = audioCtx.createGain();
+        modulated.gain.value = 1.0 - depth.gain.value;
+
+        modulator.connect(depth).connect(modulated.gain);
+        carrier.connect(modulated);
+
+        //ADSR envelope
+        envelope = audioCtx.createGain();
+        envelope.gain.setValueAtTime(0, now);
+                
+        modulated.connect(envelope);
+        envelope.connect(globalGain);
+
+        //ADSR envelope
+        const attackTime = 0.2;
+        const decayTime = 0.3;
+        const sustainLevel = 0.3;
+        const maxGain = 0.4;
+
+        envelope.gain.setTargetAtTime(maxGain, now, attackTime);
+        envelope.gain.setTargetAtTime(sustainLevel, now + attackTime, decayTime);
+
+        // Start the oscillators
+        carrier.start();
+        modulator.start();
+
+        // Store oscillator, gain, and sustain level for ADSR control
+        activeOscillators[key] = {oscCarr: carrier, oscMod: modulator, gain: envelope, sustainLevel: 0.3}
         updateNormalization();
     }
 
