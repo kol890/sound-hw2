@@ -138,18 +138,27 @@ document.addEventListener("DOMContentLoaded", function(event) {
 
     keyDiv.addEventListener('mouseup', () => {
         if (activeOscillators[k.code]) {
-            const {osc, gain, sustainLevel} = activeOscillators[k.code];
+            const notes = activeOscillators[k.code];
             const releaseTime = 0.12;
             const releaseStartTime = audioCtx.currentTime;
             
             // Cancel pending automations to avoid clicks
-            gain.gain.cancelScheduledValues(releaseStartTime);
-            const currentGain = gain.gain.value;
-            gain.gain.setValueAtTime(currentGain, releaseStartTime);
+            notes.gain.gain.cancelScheduledValues(releaseStartTime);
+            const currentGain = notes.gain.gain.value;
+            notes.gain.gain.setValueAtTime(currentGain, releaseStartTime);
             
-           // Release: linear ramp to 0
-            gain.gain.linearRampToValueAtTime(0, releaseStartTime + releaseTime);
-            osc.stop(releaseStartTime + releaseTime + 0.01);
+            // Release: linear ramp to 0
+            notes.gain.gain.linearRampToValueAtTime(0, releaseStartTime + releaseTime);
+            
+            // Stop oscillator(s) just after release completes
+            if (notes.osc1) {
+                notes.osc1.stop(releaseStartTime + releaseTime + 0.01);
+                notes.osc2.stop(releaseStartTime + releaseTime + 0.01);
+                notes.osc3.stop(releaseStartTime + releaseTime + 0.01);
+            } else if (notes.osc) {
+                notes.osc.stop(releaseStartTime + releaseTime + 0.01);
+            }
+            
             delete activeOscillators[k.code];
             updateNormalization();
             keyDiv.classList.remove('active');
@@ -163,17 +172,27 @@ document.addEventListener("DOMContentLoaded", function(event) {
 
     keyDiv.addEventListener('mouseleave', () => {
         if (activeOscillators[k.code]) {
-            const {osc, gain, sustainLevel} = activeOscillators[k.code];
+            const notes = activeOscillators[k.code];
             const releaseTime = 0.12;
             const releaseStartTime = audioCtx.currentTime;
             
             // Cancel pending automations to avoid clicks
-            gain.gain.cancelScheduledValues(releaseStartTime);
-            const currentGain = gain.gain.value;
-            gain.gain.setValueAtTime(currentGain, releaseStartTime);
+            notes.gain.gain.cancelScheduledValues(releaseStartTime);
+            const currentGain = notes.gain.gain.value;
+            notes.gain.gain.setValueAtTime(currentGain, releaseStartTime);
             
-            gain.gain.linearRampToValueAtTime(0, releaseStartTime + releaseTime);
-            osc.stop(releaseStartTime + releaseTime + 0.01);
+            // Release: linear ramp to 0
+            notes.gain.gain.linearRampToValueAtTime(0, releaseStartTime + releaseTime);
+            
+            // Stop oscillator(s) just after release completes
+            if (notes.osc1) {
+                notes.osc1.stop(releaseStartTime + releaseTime + 0.01);
+                notes.osc2.stop(releaseStartTime + releaseTime + 0.01);
+                notes.osc3.stop(releaseStartTime + releaseTime + 0.01);
+            } else if (notes.osc) {
+                notes.osc.stop(releaseStartTime + releaseTime + 0.01);
+            }
+            
             delete activeOscillators[k.code];
             updateNormalization();
             keyDiv.classList.remove('active');
@@ -321,10 +340,10 @@ document.addEventListener("DOMContentLoaded", function(event) {
         const peak = (dataArray.reduce((m, v) => (v > m ? v : m), 0) - 128) / 127.0;
         if (peak > maxAllTime) {
             maxAllTime = peak;
-            //console.log('[AMPLITUDE] New record peak =', maxAllTime.toFixed(3));
+            console.log('[AMPLITUDE] New record peak =', maxAllTime.toFixed(3));
         }
         if (peak > 0.95) {
-            //console.warn('[AMPLITUDE] WARNING current peak approaching 1.0 ->', peak.toFixed(3));
+            console.warn('[AMPLITUDE] WARNING current peak approaching 1.0 ->', peak.toFixed(3));
         }
         // continue monitoring
         requestAnimationFrame(monitorAmplitude);
@@ -362,22 +381,32 @@ document.addEventListener("DOMContentLoaded", function(event) {
     function keyUp(event) {
         const key = (event.detail || event.which).toString();
         if (keyboardFrequencyMap[key] && activeOscillators[key]) {
-            const {osc, gain, sustainLevel} = activeOscillators[key];
+            const notes = activeOscillators[key];
             const releaseTime = 0.12;
             const releaseStartTime = audioCtx.currentTime;
             
             // Cancel any pending automations (attack/decay) to avoid clicks
-            gain.gain.cancelScheduledValues(releaseStartTime);
+            notes.gain.gain.cancelScheduledValues(releaseStartTime);
             
             // Capture current gain value and release from there
-            const currentGain = gain.gain.value;
-            gain.gain.setValueAtTime(currentGain, releaseStartTime);
+            const currentGain = notes.gain.gain.value;
+            notes.gain.gain.setValueAtTime(currentGain, releaseStartTime);
             
             // Release: linear ramp from current to 0
-            gain.gain.linearRampToValueAtTime(0, releaseStartTime + releaseTime);
+            notes.gain.gain.linearRampToValueAtTime(0, releaseStartTime + releaseTime);
             
-            // Stop oscillator just after release completes
-            osc.stop(releaseStartTime + releaseTime + 0.01);
+            // Stop oscillator(s) just after release completes
+            // Handle additive synthesis (multiple oscillators)
+            if (notes.osc1) {
+                notes.osc1.stop(releaseStartTime + releaseTime + 0.01);
+                notes.osc2.stop(releaseStartTime + releaseTime + 0.01);
+                notes.osc3.stop(releaseStartTime + releaseTime + 0.01);
+            } 
+            // Handle other synthesis modes (single oscillator)
+            else if (notes.osc) {
+                notes.osc.stop(releaseStartTime + releaseTime + 0.01);
+            }
+            
             delete activeOscillators[key];
             updateNormalization();
             
@@ -410,21 +439,62 @@ document.addEventListener("DOMContentLoaded", function(event) {
     // ADDITIVE SYNTHESIS
     // ============================================
     function playNoteAdditive(key) {
-        // TODO: Implement additive oscillator mode
-        
         const now = audioCtx.currentTime;
-        const noteGain = audioCtx.createGain();
-        noteGain.gain.setValueAtTime(0.3, now);
-        noteGain.connect(globalGain);
+
+        // Create oscillator and gain nodes
+        oscillator1 = audioCtx.createOscillator();
+        oscillator2 = audioCtx.createOscillator();
+        oscillator3 = audioCtx.createOscillator();
+        gain1 = audioCtx.createGain();
+        gain2 = audioCtx.createGain();
+        gain3 = audioCtx.createGain();
+
+        oscillator1.frequency.setValueAtTime(keyboardFrequencyMap[key], now);
+        oscillator1.type = currentWaveform;
+
+        oscillator2.frequency.setValueAtTime(keyboardFrequencyMap[key] * 2, now);
+        oscillator2.type = currentWaveform;
+
+        oscillator3.frequency.setValueAtTime(keyboardFrequencyMap[key] * 3, now);
+        oscillator3.type = currentWaveform;
+
+        // Set gain, control individual amplitude
+        gain1.gain.setValueAtTime(0.75, now);
+        gain2.gain.setValueAtTime(0.2, now);
+        gain3.gain.setValueAtTime(0.05, now);
+                
+        // Connect the oscillators
+        oscillator1.connect(gain1);
+        oscillator2.connect(gain2);
+        oscillator3.connect(gain3);
+
+        // envelope for overall control
+        envelope = audioCtx.createGain();
+        envelope.gain.setValueAtTime(0, now);
+                
+        gain1.connect(envelope);
+        gain2.connect(envelope);
+        gain3.connect(envelope);
         
-        // Placeholder: store dummy oscillator for now
-        const osc = audioCtx.createOscillator();
-        osc.frequency.setValueAtTime(keyboardFrequencyMap[key], now);
-        osc.type = currentWaveform;
-        osc.connect(noteGain);
-        osc.start();
-        
-        activeOscillators[key] = {osc, gain: noteGain, sustainLevel: 0.3}
+        // Connect through globalGain and normalizeGain to properly handle multiple voices
+        envelope.connect(globalGain);
+
+        //ADSR envelope
+        const attackTime = 0.2;
+        const decayTime = 0.3;
+        const sustainLevel = 0.3;
+        const maxGain = 0.4;
+
+        envelope.gain.setTargetAtTime(maxGain, now, attackTime);
+        envelope.gain.setTargetAtTime(sustainLevel, now + attackTime, decayTime);
+
+        // Start the oscillators
+        oscillator1.start();
+        oscillator2.start();
+        oscillator3.start();
+
+        // Store oscillator, gain, and sustain level for ADSR control
+        activeOscillators[key] = {osc1: oscillator1, osc2: oscillator2, osc3: oscillator3, gain: envelope, sustainLevel: 0.3}
         updateNormalization();
     }
 
