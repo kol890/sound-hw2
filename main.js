@@ -433,8 +433,6 @@ document.addEventListener("DOMContentLoaded", function(event) {
     function playNote(key) {
         if (currentMode === 'Additive') {
             playNoteAdditive(key);
-        } else if (currentMode === 'Additive_LFO') {
-            playNoteAdditiveLFO(key);
         } else if (currentMode === 'AM') {
             playNoteAM(key);
         } else if (currentMode === 'AM_LFO') {
@@ -511,65 +509,6 @@ document.addEventListener("DOMContentLoaded", function(event) {
         updateNormalization();
     }
 
-    function playNoteAdditiveLFO(key) {
-        const now = audioCtx.currentTime;
-
-        // Create oscillator and gain nodes
-        oscillator1 = audioCtx.createOscillator();
-        oscillator2 = audioCtx.createOscillator();
-        oscillator3 = audioCtx.createOscillator();
-        gain1 = audioCtx.createGain();
-        gain2 = audioCtx.createGain();
-        gain3 = audioCtx.createGain();
-
-        oscillator1.frequency.setValueAtTime(keyboardFrequencyMap[key], now);
-        oscillator1.type = currentWaveform;
-
-        oscillator2.frequency.setValueAtTime(keyboardFrequencyMap[key] * 2, now);
-        oscillator2.type = currentWaveform;
-
-        oscillator3.frequency.setValueAtTime(keyboardFrequencyMap[key] * 3, now);
-        oscillator3.type = currentWaveform;
-
-        // Set gain, control individual amplitude
-        gain1.gain.setValueAtTime(0.75, now);
-        gain2.gain.setValueAtTime(0.2, now);
-        gain3.gain.setValueAtTime(0.05, now);
-                
-        // Connect the oscillators
-        oscillator1.connect(gain1);
-        oscillator2.connect(gain2);
-        oscillator3.connect(gain3);
-
-        // envelope for overall control
-        envelope = audioCtx.createGain();
-        envelope.gain.setValueAtTime(0, now);
-                
-        gain1.connect(envelope);
-        gain2.connect(envelope);
-        gain3.connect(envelope);
-        
-        // Connect through globalGain and normalizeGain to properly handle multiple voices
-        envelope.connect(globalGain);
-
-        //ADSR envelope
-        const attackTime = 0.2;
-        const decayTime = 0.3;
-        const sustainLevel = 0.3;
-        const maxGain = 0.4;
-
-        envelope.gain.setTargetAtTime(maxGain, now, attackTime);
-        envelope.gain.setTargetAtTime(sustainLevel, now + attackTime, decayTime);
-
-        // Start the oscillators
-        oscillator1.start();
-        oscillator2.start();
-        oscillator3.start();
-
-        // Store oscillator, gain, and sustain level for ADSR control
-        activeOscillators[key] = {osc1: oscillator1, osc2: oscillator2, osc3: oscillator3, gain: envelope, sustainLevel: 0.3}
-        updateNormalization();
-    }
 
     // ============================================
     // AM SYNTHESIS
@@ -660,6 +599,14 @@ document.addEventListener("DOMContentLoaded", function(event) {
         // Start the oscillators
         carrier.start();
         modulator.start();
+
+        // add LFO
+        const lfo = audioCtx.createOscillator();
+        lfo.frequency.value = 0.5;
+        const lfoGain = audioCtx.createGain();
+        lfoGain.gain.value = 0.2;
+        lfo.connect(lfoGain).connect(depth.gain);
+        lfo.start();
 
         // Store oscillator, gain, and sustain level for ADSR control
         activeOscillators[key] = {oscCarr: carrier, oscMod: modulator, gain: envelope, sustainLevel: 0.3}
@@ -756,7 +703,6 @@ document.addEventListener("DOMContentLoaded", function(event) {
         carrier.start();
         modulator.start();
 
-        // add LFO
         // add LFO
         const lfo = audioCtx.createOscillator();
         lfo.frequency.value = 6;
