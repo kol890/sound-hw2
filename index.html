@@ -22,13 +22,8 @@
                         <option value="AM_LFO">AM + LFO</option>
                         <option value="FM">FM</option>
                         <option value="FM_LFO">FM + LFO</option>
-
                         <option value="None">None</option>
                     </select>
-                    <div>
-                        <button id="playButton">Play C</button>
-                        <button id="stopButton" disabled>Stop</button>
-                    </div>
                 </div>
                 <div class="right">
                     <span>Current waveform: </span>
@@ -38,6 +33,81 @@
                         <option value="sawtooth">Sawtooth</option>
                         <option value="triangle">Triangle</option>
                     </select>
+                </div>
+            </div>
+
+            <!-- SYNTHESIS PARAMETERS CONTROL PANEL -->
+            <div class="controlPanel">
+                <h3>Synthesis Parameters</h3>
+
+                <!-- GLOBAL ADSR CONTROLS -->
+                <div class="paramGroup">
+                    <h4>ADSR Envelope (Global)</h4>
+                    <div class="paramControl">
+                        <label>Attack (s): <span id="attackLabel">0.2</span></label>
+                        <input type="range" name="attackTime" min="0.01" max="5" value="0.2" step="0.01">
+                    </div>
+                    <div class="paramControl">
+                        <label>Decay (s): <span id="decayLabel">0.3</span></label>
+                        <input type="range" name="decayTime" min="0.01" max="5" value="0.3" step="0.01">
+                    </div>
+                    <div class="paramControl">
+                        <label>Sustain Level: <span id="sustainLabel">0.3</span></label>
+                        <input type="range" name="sustainLevel" min="0" max="1" value="0.3" step="0.05">
+                    </div>
+                </div>
+
+                <!-- ADDITIVE SYNTHESIS CONTROLS (use number of partials instead of individual amplitudes) -->
+                <div class="paramGroup" id="additiveControls">
+                    <h4>Additive Synthesis</h4>
+                    <div class="paramControl">
+                        <label>Number of Partials: <span id="numPartialsLabel">3</span></label>
+                        <input type="range" name="numPartials" min="1" max="8" value="3" step="1">
+                    </div>
+                    <div class="paramControl">
+                        <label>Partial Decay: <span id="partialDecayLabel">1.00</span></label>
+                        <input type="range" name="partialDecay" min="0" max="3" value="1" step="0.1">
+                    </div>
+                    <div style="font-size:0.85em;color:#666;margin-top:6px;">How quickly higher partials diminish.</div>
+                </div>
+
+                <!-- AM SYNTHESIS CONTROLS -->
+                <div class="paramGroup" id="amControls" style="display:none;">
+                    <h4>AM Synthesis Parameters</h4>
+                    <!-- <div class="paramControl">
+                        <label>Modulation Frequency (Hz): <span id="amModFreqLabel">0 Hz</span></label>
+                        <input type="range" name="amModFreq" min="0.1" max="20" value="0.5" step="0.1">
+                    </div> -->
+                    <div class="paramControl">
+                        <label>Modulation Depth: <span id="amDepthLabel">0.5</span></label>
+                        <input type="range" name="amDepth" min="0" max="1" value="0.5" step="0.05">
+                    </div>
+                </div>
+
+                <!-- FM SYNTHESIS CONTROLS -->
+                <div class="paramGroup" id="fmControls" style="display:none;">
+                    <h4>FM Synthesis Parameters</h4>
+                    <!-- <div class="paramControl">
+                        <label>Modulation Frequency (Hz): <span id="fmModFreqLabel">0 Hz</span></label>
+                        <input type="range" name="fmModFreq" min="0.5" max="10" value="3" step="0.5">
+                    </div> -->
+                    <div class="paramControl">
+                        <label>Modulation Index: <span id="fmIndexLabel">150</span></label>
+                        <input type="range" name="fmIndex" min="0" max="1000" value="150" step="50">
+                    </div>
+                </div>
+
+                <!-- LFO CONTROLS -->
+                <div class="paramGroup" id="lfoControls" style="display:none;">
+                    <h4>LFO Parameters</h4>
+                    <div class="paramControl">
+                        <label>LFO Frequency (Hz): <span id="lfoFreqLabel">6</span></label>
+                        <input type="range" name="lfoFreq" min="0" max="20" value="6" step="0.5">
+                    </div>
+                    <div class="paramControl">
+                        <label>LFO Depth: <span id="lfoDepthLabel">8</span></label>
+                        <input type="range" name="lfoDepth" min="0" max="100" value="8" step="1">
+                    </div>
                 </div>
             </div>
         </div>

@@ -50,9 +50,36 @@ document.addEventListener("DOMContentLoaded", function(event) {
     const memFadeSec = 1; // seconds for color memory fade
     const memMap = {}; // map key code -> color overlay element
 
+    // ============================================
+    // SYNTHESIS PARAMETERS
+    // ============================================
+    const synthParams = {
+        // Global ADSR
+        attackTime: 0.2,
+        decayTime: 0.3,
+        sustainLevel: 0.3,
+        maxGain: 0.4,
+        
+        // Additive: control partial count and spectral decay (normalized to avoid clipping)
+        numPartials: 3,
+        partialDecay: 1.0,
+        
+        // AM
+        //amModFreq: 0.5,
+        amDepth: 0.5,
+        
+        // FM
+        fmModFreq: 3,
+        fmIndex: 150,
+        
+        // LFO
+        lfoFreq: 6,
+        lfoDepth: 8  // for FM_LFO
+    };
+
     // Simple oscillator for synthesis experiments EXPERIMENTAL
-    let simpleOscillator = null;
-    const cFrequency = 261.625565300598634; // C
+    //let simpleOscillator = null;
+    //const cFrequency = 261.625565300598634; // C
 
     function freqToHue(freq) {
         // map frequency (log) into 0..360 hue range using expected piano range
@@ -150,7 +177,9 @@ document.addEventListener("DOMContentLoaded", function(event) {
             notes.gain.gain.linearRampToValueAtTime(0, releaseStartTime + releaseTime);
             
             // Stop oscillator(s) just after release completes
-            if (notes.osc1) {
+            if (notes.oscPartials) {
+                notes.oscPartials.forEach(o => o.stop(releaseStartTime + releaseTime + 0.01));
+            } else if (notes.osc1) {
                 notes.osc1.stop(releaseStartTime + releaseTime + 0.01);
                 notes.osc2.stop(releaseStartTime + releaseTime + 0.01);
                 notes.osc3.stop(releaseStartTime + releaseTime + 0.01);
@@ -189,7 +218,9 @@ document.addEventListener("DOMContentLoaded", function(event) {
             notes.gain.gain.linearRampToValueAtTime(0, releaseStartTime + releaseTime);
             
             // Stop oscillator(s) just after release completes
-            if (notes.osc1) {
+            if (notes.oscPartials) {
+                notes.oscPartials.forEach(o => o.stop(releaseStartTime + releaseTime + 0.01));
+            } else if (notes.osc1) {
                 notes.osc1.stop(releaseStartTime + releaseTime + 0.01);
                 notes.osc2.stop(releaseStartTime + releaseTime + 0.01);
                 notes.osc3.stop(releaseStartTime + releaseTime + 0.01);
@@ -225,11 +256,121 @@ document.addEventListener("DOMContentLoaded", function(event) {
     if (synthesisSelect) {
         synthesisSelect.addEventListener('change', (e) => {
             currentMode = e.target.value;
+
+            // If switching into an LFO-enabled mode, set sensible defaults
+            if (currentMode === 'FM_LFO') {
+                synthParams.lfoFreq = 6;
+                synthParams.lfoDepth = 8;
+            } else if (currentMode === 'AM_LFO') {
+                synthParams.lfoFreq = 2;
+                synthParams.lfoDepth = 3;
+            }
+
+            // Update any visible controls/labels to reflect these defaults
+            const lfoFreqInput = document.querySelector('input[name="lfoFreq"]');
+            const lfoDepthInput = document.querySelector('input[name="lfoDepth"]');
+            const lfoFreqLabel = document.getElementById('lfoFreqLabel');
+            const lfoDepthLabel = document.getElementById('lfoDepthLabel');
+            if (lfoFreqInput) lfoFreqInput.value = synthParams.lfoFreq;
+            if (lfoDepthInput) lfoDepthInput.value = synthParams.lfoDepth;
+            if (lfoFreqLabel) lfoFreqLabel.textContent = (typeof synthParams.lfoFreq === 'number') ? synthParams.lfoFreq.toFixed(1) + ' Hz' : synthParams.lfoFreq;
+            if (lfoDepthLabel) lfoDepthLabel.textContent = synthParams.lfoDepth;
+
+            // Show/hide relevant parameter groups
+            updateControlPanelVisibility();
         });
     }
 
+    // ============================================
+    // PARAMETER CONTROL PANEL SETUP
+    // ============================================
+    function updateControlPanelVisibility() {
+        const additiveControls = document.getElementById('additiveControls');
+        const amControls = document.getElementById('amControls');
+        const fmControls = document.getElementById('fmControls');
+        const lfoControls = document.getElementById('lfoControls');
+        
+        // Hide all initially
+        additiveControls.style.display = 'none';
+        amControls.style.display = 'none';
+        fmControls.style.display = 'none';
+        lfoControls.style.display = 'none';
+        
+        // Show based on current mode
+        if (currentMode === 'Additive') {
+            additiveControls.style.display = 'block';
+        } else if (currentMode === 'AM') {
+            amControls.style.display = 'block';
+        } else if (currentMode === 'AM_LFO') {
+            amControls.style.display = 'block';
+            lfoControls.style.display = 'block';
+        } else if (currentMode === 'FM') {
+            fmControls.style.display = 'block';
+        } else if (currentMode === 'FM_LFO') {
+            fmControls.style.display = 'block';
+            lfoControls.style.display = 'block';
+        }
+    }
+
+    // Add event listeners for all parameter controls
+    const paramControls = document.querySelectorAll('.paramControl input[type="range"]');
+    // Helper to find label element for a parameter, with fallbacks for different id naming schemes
+    function findLabelElement(paramName) {
+        const primaryId = paramName + 'Label';
+        let el = document.getElementById(primaryId);
+        if (el) return el;
+        const altMap = {
+            'harmonic1': 'harm1Label',
+            'harmonic2': 'harm2Label',
+            'harmonic3': 'harm3Label',
+            'sustainLevel': 'sustainLabel',
+            'attackTime': 'attackLabel',
+            'decayTime': 'decayLabel',
+            'amDepth': 'amDepthLabel',
+            'fmIndex': 'fmIndexLabel',
+            'lfoFreq': 'lfoFreqLabel',
+            'lfoDepth': 'lfoDepthLabel'
+        };
+        // Add new additive labels
+        if (!el && paramName === 'numPartials') el = document.getElementById('numPartialsLabel');
+        if (!el && paramName === 'partialDecay') el = document.getElementById('partialDecayLabel');
+        if (altMap[paramName]) {
+            el = document.getElementById(altMap[paramName]);
+        }
+        return el;
+    }
+
+    paramControls.forEach(control => {
+        control.addEventListener('input', (e) => {
+            const paramName = e.target.name;
+            const value = parseFloat(e.target.value);
+            const labelEl = findLabelElement(paramName);
+
+            // Update parameter value
+            synthParams[paramName] = value;
+
+            // Update label display (with formatting for freq/time)
+            if (labelEl) {
+                if (paramName === 'attackTime' || paramName === 'decayTime') {
+                    labelEl.textContent = value;
+                } else if (paramName === 'numPartials') {
+                    labelEl.textContent = Math.round(value);
+                } else if (paramName === 'amModFreq' || paramName === 'fmModFreq' || paramName === 'lfoFreq') {
+                    labelEl.textContent = value.toFixed(1) + ' Hz';
+                } else if (paramName === 'lfoDepth' || paramName === 'fmIndex' || paramName === 'amDepth') {
+                    labelEl.textContent = value;
+                } else {
+                    labelEl.textContent = value.toFixed(2);
+                }
+            }
+        });
+    });
+
+    // Initialize control panel visibility
+    updateControlPanelVisibility();
+
     // Add listeners for play/stop buttons - EXPERIMENTAL
-    const playButton = document.querySelector('#playButton');
+    /*const playButton = document.querySelector('#playButton');
     const stopButton = document.querySelector('#stopButton');
 
     if (playButton) {
@@ -311,7 +452,7 @@ document.addEventListener("DOMContentLoaded", function(event) {
                 stopButton.disabled = true;
             }
         });
-    }
+    } */
 
     // Next we add listeners to the keys. These will add and remove activeOscillators.
     window.addEventListener('keydown', keyDown, false);
@@ -398,7 +539,9 @@ document.addEventListener("DOMContentLoaded", function(event) {
             
             // Stop oscillator(s) just after release completes
             // Handle additive synthesis (multiple oscillators)
-            if (notes.osc1) {
+            if (notes.oscPartials) {
+                notes.oscPartials.forEach(o => o.stop(releaseStartTime + releaseTime + 0.01));
+            } else if (notes.osc1) {
                 notes.osc1.stop(releaseStartTime + releaseTime + 0.01);
                 notes.osc2.stop(releaseStartTime + releaseTime + 0.01);
                 notes.osc3.stop(releaseStartTime + releaseTime + 0.01);
@@ -451,61 +594,53 @@ document.addEventListener("DOMContentLoaded", function(event) {
     // ============================================
     function playNoteAdditive(key) {
         const now = audioCtx.currentTime;
+        // Create dynamic partials based on user-selected number; partial amplitudes are
+        // computed with a spectral decay and normalized so the sum = 1. The global
+        // ADSR (`synthParams.maxGain`) still controls the overall loudness to avoid clipping.
+        const baseFreq = keyboardFrequencyMap[key];
+        const nPartials = Math.max(1, Math.round(synthParams.numPartials));
+        const decay = Math.max(0.0001, synthParams.partialDecay);
 
-        // Create oscillator and gain nodes
-        oscillator1 = audioCtx.createOscillator();
-        oscillator2 = audioCtx.createOscillator();
-        oscillator3 = audioCtx.createOscillator();
-        gain1 = audioCtx.createGain();
-        gain2 = audioCtx.createGain();
-        gain3 = audioCtx.createGain();
+        // compute weights
+        const weights = [];
+        let weightSum = 0;
+        for (let i = 1; i <= nPartials; i++) {
+            const w = 1 / Math.pow(i, decay);
+            weights.push(w);
+            weightSum += w;
+        }
 
-        oscillator1.frequency.setValueAtTime(keyboardFrequencyMap[key], now);
-        oscillator1.type = currentWaveform;
-
-        oscillator2.frequency.setValueAtTime(keyboardFrequencyMap[key] * 2, now);
-        oscillator2.type = currentWaveform;
-
-        oscillator3.frequency.setValueAtTime(keyboardFrequencyMap[key] * 3, now);
-        oscillator3.type = currentWaveform;
-
-        // Set gain, control individual amplitude
-        gain1.gain.setValueAtTime(0.75, now);
-        gain2.gain.setValueAtTime(0.2, now);
-        gain3.gain.setValueAtTime(0.05, now);
-                
-        // Connect the oscillators
-        oscillator1.connect(gain1);
-        oscillator2.connect(gain2);
-        oscillator3.connect(gain3);
-
-        // envelope for overall control
-        envelope = audioCtx.createGain();
+        const envelope = audioCtx.createGain();
         envelope.gain.setValueAtTime(0, now);
-                
-        gain1.connect(envelope);
-        gain2.connect(envelope);
-        gain3.connect(envelope);
+        envelope.connect(globalGain);
+
+        const partialOscs = [];
+        for (let i = 1; i <= nPartials; i++) {
+            const osc = audioCtx.createOscillator();
+            const g = audioCtx.createGain();
+            osc.type = currentWaveform;
+            osc.frequency.setValueAtTime(baseFreq * i, now);
+            // normalized amplitude for this partial
+            g.gain.setValueAtTime(weights[i-1] / weightSum, now);
+            osc.connect(g);
+            g.connect(envelope);
+            osc.start();
+            partialOscs.push(osc);
+            // for compatibility with older stop logic, also assign first few named refs
+            if (i === 1) oscillator1 = osc;
+            if (i === 2) oscillator2 = osc;
+            if (i === 3) oscillator3 = osc;
+        }
         
         // Connect through globalGain and normalizeGain to properly handle multiple voices
         envelope.connect(globalGain);
 
-        //ADSR envelope
-        const attackTime = 0.2;
-        const decayTime = 0.3;
-        const sustainLevel = 0.3;
-        const maxGain = 0.4;
+        // ADSR envelope from parameters
+        envelope.gain.setTargetAtTime(synthParams.maxGain, now, synthParams.attackTime);
+        envelope.gain.setTargetAtTime(synthParams.sustainLevel, now + synthParams.attackTime, synthParams.decayTime);
 
-        envelope.gain.setTargetAtTime(maxGain, now, attackTime);
-        envelope.gain.setTargetAtTime(sustainLevel, now + attackTime, decayTime);
-
-        // Start the oscillators
-        oscillator1.start();
-        oscillator2.start();
-        oscillator3.start();
-
-        // Store oscillator, gain, and sustain level for ADSR control
-        activeOscillators[key] = {osc1: oscillator1, osc2: oscillator2, osc3: oscillator3, gain: envelope, sustainLevel: 0.3}
+        // Store oscillator array, envelope, and sustain level for ADSR control
+        activeOscillators[key] = {oscPartials: partialOscs, gain: envelope, sustainLevel: synthParams.sustainLevel}
         updateNormalization();
     }
 
@@ -514,10 +649,9 @@ document.addEventListener("DOMContentLoaded", function(event) {
     // AM SYNTHESIS
     // ============================================
     function playNoteAM(key) {
-        // TODO: Implement AM (Amplitude Modulation) synthesis
         const now = audioCtx.currentTime;
                 
-        // Create carrier, modutor, and gain nodes
+        // Create carrier and modulator
         carrier = audioCtx.createOscillator();
         modulator = audioCtx.createOscillator();
                 
@@ -527,43 +661,37 @@ document.addEventListener("DOMContentLoaded", function(event) {
         modulator.type = currentWaveform;
 
         depth = audioCtx.createGain();
-        depth.gain.value = 0.5;
+        depth.gain.value = synthParams.amDepth;  // Use parameter
         modulated = audioCtx.createGain();
-        modulated.gain.value = 1.0 - depth.gain.value;
+        modulated.gain.value = 1.0 - synthParams.amDepth;  // Use parameter
 
         modulator.connect(depth).connect(modulated.gain);
         carrier.connect(modulated);
 
-        //ADSR envelope
+        // ADSR envelope
         envelope = audioCtx.createGain();
         envelope.gain.setValueAtTime(0, now);
                 
         modulated.connect(envelope);
         envelope.connect(globalGain);
 
-        //ADSR envelope
-        const attackTime = 0.2;
-        const decayTime = 0.3;
-        const sustainLevel = 0.3;
-        const maxGain = 0.4;
-
-        envelope.gain.setTargetAtTime(maxGain, now, attackTime);
-        envelope.gain.setTargetAtTime(sustainLevel, now + attackTime, decayTime);
+        // ADSR from parameters
+        envelope.gain.setTargetAtTime(synthParams.maxGain, now, synthParams.attackTime);
+        envelope.gain.setTargetAtTime(synthParams.sustainLevel, now + synthParams.attackTime, synthParams.decayTime);
 
         // Start the oscillators
         carrier.start();
         modulator.start();
 
         // Store oscillator, gain, and sustain level for ADSR control
-        activeOscillators[key] = {oscCarr: carrier, oscMod: modulator, gain: envelope, sustainLevel: 0.3}
+        activeOscillators[key] = {oscCarr: carrier, oscMod: modulator, gain: envelope, sustainLevel: synthParams.sustainLevel}
         updateNormalization();
     }
 
     function playNoteAMLFO(key) {
-        // TODO: Implement AM (Amplitude Modulation) synthesis
         const now = audioCtx.currentTime;
                 
-        // Create carrier, modutor, and gain nodes
+        // Create carrier and modulator
         carrier = audioCtx.createOscillator();
         modulator = audioCtx.createOscillator();
                 
@@ -573,28 +701,23 @@ document.addEventListener("DOMContentLoaded", function(event) {
         modulator.type = currentWaveform;
 
         depth = audioCtx.createGain();
-        depth.gain.value = 0.5;
+        depth.gain.value = synthParams.amDepth;  // Use parameter
         modulated = audioCtx.createGain();
-        modulated.gain.value = 1.0 - depth.gain.value;
+        modulated.gain.value = 1.0 - synthParams.amDepth;  // Use parameter
 
         modulator.connect(depth).connect(modulated.gain);
         carrier.connect(modulated);
 
-        //ADSR envelope
+        // ADSR envelope
         envelope = audioCtx.createGain();
         envelope.gain.setValueAtTime(0, now);
                 
         modulated.connect(envelope);
         envelope.connect(globalGain);
 
-        //ADSR envelope
-        const attackTime = 0.2;
-        const decayTime = 0.3;
-        const sustainLevel = 0.3;
-        const maxGain = 0.4;
-
-        envelope.gain.setTargetAtTime(maxGain, now, attackTime);
-        envelope.gain.setTargetAtTime(sustainLevel, now + attackTime, decayTime);
+        // ADSR from parameters
+        envelope.gain.setTargetAtTime(synthParams.maxGain, now, synthParams.attackTime);
+        envelope.gain.setTargetAtTime(synthParams.sustainLevel, now + synthParams.attackTime, synthParams.decayTime);
 
         // Start the oscillators
         carrier.start();
@@ -602,14 +725,14 @@ document.addEventListener("DOMContentLoaded", function(event) {
 
         // add LFO
         const lfo = audioCtx.createOscillator();
-        lfo.frequency.value = 0.5;
+        lfo.frequency.value = synthParams.lfoFreq;  // Use parameter
         const lfoGain = audioCtx.createGain();
-        lfoGain.gain.value = 0.2;
-        lfo.connect(lfoGain).connect(depth.gain);
+        lfoGain.gain.value = synthParams.lfoDepth;
+        lfo.connect(lfoGain).connect(modulator.frequency);
         lfo.start();
 
         // Store oscillator, gain, and sustain level for ADSR control
-        activeOscillators[key] = {oscCarr: carrier, oscMod: modulator, gain: envelope, sustainLevel: 0.3}
+        activeOscillators[key] = {oscCarr: carrier, oscMod: modulator, gain: envelope, lfo: lfo, lfoGain: lfoGain, sustainLevel: synthParams.sustainLevel}
         updateNormalization();
     }
 
@@ -617,10 +740,9 @@ document.addEventListener("DOMContentLoaded", function(event) {
     // FM SYNTHESIS
     // ============================================
     function playNoteFM(key) {
-        // TODO: Implement FM (Frequency Modulation) synthesis
         const now = audioCtx.currentTime;
                 
-        // Create oscillator, modutor, and gain nodes
+        // Create carrier and modulator
         carrier = audioCtx.createOscillator();
         modulator = audioCtx.createOscillator();
                 
@@ -631,42 +753,35 @@ document.addEventListener("DOMContentLoaded", function(event) {
         modulator.type = currentWaveform;
 
         index = audioCtx.createGain();
-        index.gain.value = 150;
+        index.gain.value = synthParams.fmIndex;  // Use parameter
 
-                
         modulator.connect(index);
         index.connect(carrier.frequency);
 
-        //ADSR envelope
+        // ADSR envelope
         envelope = audioCtx.createGain();
         envelope.gain.setValueAtTime(0, now);
                 
         carrier.connect(envelope);
         envelope.connect(globalGain);
 
-        //ADSR envelope
-        const attackTime = 0.2;
-        const decayTime = 0.3;
-        const sustainLevel = 0.3;
-        const maxGain = 0.4;
-
-        envelope.gain.setTargetAtTime(maxGain, now, attackTime);
-        envelope.gain.setTargetAtTime(sustainLevel, now + attackTime, decayTime);
+        // ADSR from parameters
+        envelope.gain.setTargetAtTime(synthParams.maxGain, now, synthParams.attackTime);
+        envelope.gain.setTargetAtTime(synthParams.sustainLevel, now + synthParams.attackTime, synthParams.decayTime);
 
         // Start the oscillators
         carrier.start();
         modulator.start();
 
         // Store oscillator, gain, and sustain level for ADSR control
-        activeOscillators[key] = {oscCarr: carrier, oscMod: modulator, gain: envelope, sustainLevel: 0.3}
+        activeOscillators[key] = {oscCarr: carrier, oscMod: modulator, gain: envelope, sustainLevel: synthParams.sustainLevel}
         updateNormalization();
     }
 
     function playNoteFMLFO(key) {
-        // TODO: Implement FM (Frequency Modulation) synthesis
         const now = audioCtx.currentTime;
                 
-        // Create oscillator, modutor, and gain nodes
+        // Create carrier and modulator
         carrier = audioCtx.createOscillator();
         modulator = audioCtx.createOscillator();
                 
@@ -677,27 +792,21 @@ document.addEventListener("DOMContentLoaded", function(event) {
         modulator.type = currentWaveform;
 
         index = audioCtx.createGain();
-        index.gain.value = 150;
+        index.gain.value = synthParams.fmIndex;  // Use parameter
 
-                
         modulator.connect(index);
         index.connect(carrier.frequency);
 
-        //ADSR envelope
+        // ADSR envelope
         envelope = audioCtx.createGain();
         envelope.gain.setValueAtTime(0, now);
                 
         carrier.connect(envelope);
         envelope.connect(globalGain);
 
-        //ADSR envelope
-        const attackTime = 0.2;
-        const decayTime = 0.3;
-        const sustainLevel = 0.3;
-        const maxGain = 0.4;
-
-        envelope.gain.setTargetAtTime(maxGain, now, attackTime);
-        envelope.gain.setTargetAtTime(sustainLevel, now + attackTime, decayTime);
+        // ADSR from parameters
+        envelope.gain.setTargetAtTime(synthParams.maxGain, now, synthParams.attackTime);
+        envelope.gain.setTargetAtTime(synthParams.sustainLevel, now + synthParams.attackTime, synthParams.decayTime);
 
         // Start the oscillators
         carrier.start();
@@ -705,14 +814,14 @@ document.addEventListener("DOMContentLoaded", function(event) {
 
         // add LFO
         const lfo = audioCtx.createOscillator();
-        lfo.frequency.value = 6;
+        lfo.frequency.value = synthParams.lfoFreq;  // Use parameter
         const lfoGain = audioCtx.createGain();
-        lfoGain.gain.value = 8;
+        lfoGain.gain.value = synthParams.lfoDepth;  // Use parameter directly
         lfo.connect(lfoGain).connect(carrier.frequency);
         lfo.start();
 
         // Store oscillator, gain, LFO and sustain level for ADSR control
-        activeOscillators[key] = {oscCarr: carrier, oscMod: modulator, gain: envelope, lfo: lfo, lfoGain: lfoGain, sustainLevel: 0.3}
+        activeOscillators[key] = {oscCarr: carrier, oscMod: modulator, gain: envelope, lfo: lfo, lfoGain: lfoGain, sustainLevel: synthParams.sustainLevel}
         updateNormalization();
     }
 
@@ -720,12 +829,6 @@ document.addEventListener("DOMContentLoaded", function(event) {
     // NONE SYNTHESIS (Simple single oscillator)
     // ============================================
     function playNoteNone(key) {
-        // ADSR parameters
-        const attackTime = 0.2;
-        const decayTime = 0.3;
-        const sustainLevel = 0.3;
-        const maxGain = 0.4;
-        
         // create gain node for this note
         const noteGain = audioCtx.createGain();
         const now = audioCtx.currentTime;
@@ -734,15 +837,12 @@ document.addEventListener("DOMContentLoaded", function(event) {
         noteGain.gain.setValueAtTime(0, now);
         
         // Attack: 0 -> maxGain with exponential ramp
-        noteGain.gain.setTargetAtTime(maxGain, now, attackTime);
+        noteGain.gain.setTargetAtTime(synthParams.maxGain, now, synthParams.attackTime);
         
         // Decay: maxGain -> sustainLevel (start after attack completes)
-        noteGain.gain.setTargetAtTime(sustainLevel, now + attackTime, decayTime);
-        
-        // hold sustain level
+        noteGain.gain.setTargetAtTime(synthParams.sustainLevel, now + synthParams.attackTime, synthParams.decayTime);
         
         noteGain.connect(globalGain);
-        //console.log(`[CONNECT] noteGain -> globalGain at ${now.toFixed(3)}s`);
         
         // Create and configure oscillator
         const osc = audioCtx.createOscillator();
@@ -752,8 +852,7 @@ document.addEventListener("DOMContentLoaded", function(event) {
         osc.start();
         
         // Store oscillator, gain, and sustain level for ADSR control
-        activeOscillators[key] = {osc, gain: noteGain, sustainLevel}
-        //console.log(`[VOICE ON] key=${key} active=${Object.keys(activeOscillators).length}`);
+        activeOscillators[key] = {osc, gain: noteGain, sustainLevel: synthParams.sustainLevel}
         updateNormalization();
     }
 })
