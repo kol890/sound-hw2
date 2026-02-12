@@ -235,23 +235,21 @@ document.addEventListener("DOMContentLoaded", function(event) {
                 carrier.frequency.value = cFrequency;
                 carrier.type = currentWaveform;
 
-                modulator.frequency.value = cFrequency * 0.5; // modulator at half the frequency of carrier for audible effect
+                modulator.frequency.value = cFrequency * 0.5;
                 modulator.type = currentWaveform;
 
-                depth = audioCtx.createGain();
-                depth.gain.value = 0.5;
-                modulated = audioCtx.createGain();
-                modulated.gain.value = 1.0 - depth.gain.value;
+                index = audioCtx.createGain();
+                index.gain.value = 150;
 
                 
-                modulator.connect(depth).connect(modulated.gain);
-                carrier.connect(modulated);
+                modulator.connect(index);
+                index.connect(carrier.frequency);
 
                 //ADSR envelope
                 envelope = audioCtx.createGain();
                 envelope.gain.setValueAtTime(0, now);
                 
-                modulated.connect(envelope);
+                carrier.connect(envelope);
                 envelope.connect(globalGain);
 
                 // Start the oscillators
@@ -538,21 +536,47 @@ document.addEventListener("DOMContentLoaded", function(event) {
     // ============================================
     function playNoteFM(key) {
         // TODO: Implement FM (Frequency Modulation) synthesis
-        // Should create carrier and modulator oscillators
-        
         const now = audioCtx.currentTime;
-        const noteGain = audioCtx.createGain();
-        noteGain.gain.setValueAtTime(0.3, now);
-        noteGain.connect(globalGain);
-        
-        // Placeholder: store dummy oscillator for now
-        const osc = audioCtx.createOscillator();
-        osc.frequency.setValueAtTime(keyboardFrequencyMap[key], now);
-        osc.type = currentWaveform;
-        osc.connect(noteGain);
-        osc.start();
-        
-        activeOscillators[key] = {osc, gain: noteGain, sustainLevel: 0.3}
+                
+        // Create oscillator, modutor, and gain nodes
+        carrier = audioCtx.createOscillator();
+        modulator = audioCtx.createOscillator();
+                
+        carrier.frequency.value = keyboardFrequencyMap[key];
+        carrier.type = currentWaveform;
+
+        modulator.frequency.value = keyboardFrequencyMap[key] * 3;
+        modulator.type = currentWaveform;
+
+        index = audioCtx.createGain();
+        index.gain.value = 150;
+
+                
+        modulator.connect(index);
+        index.connect(carrier.frequency);
+
+        //ADSR envelope
+        envelope = audioCtx.createGain();
+        envelope.gain.setValueAtTime(0, now);
+                
+        carrier.connect(envelope);
+        envelope.connect(globalGain);
+
+        //ADSR envelope
+        const attackTime = 0.2;
+        const decayTime = 0.3;
+        const sustainLevel = 0.3;
+        const maxGain = 0.4;
+
+        envelope.gain.setTargetAtTime(maxGain, now, attackTime);
+        envelope.gain.setTargetAtTime(sustainLevel, now + attackTime, decayTime);
+
+        // Start the oscillators
+        carrier.start();
+        modulator.start();
+
+        // Store oscillator, gain, and sustain level for ADSR control
+        activeOscillators[key] = {oscCarr: carrier, oscMod: modulator, gain: envelope, sustainLevel: 0.3}
         updateNormalization();
     }
 
