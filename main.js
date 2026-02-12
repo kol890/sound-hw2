@@ -62,14 +62,19 @@ document.addEventListener("DOMContentLoaded", function(event) {
         
         // Additive: control partial count and spectral decay (normalized to avoid clipping)
         numPartials: 3,
-        partialDecay: 1.0,
+        partialDecay: 2.50,
         
         // AM
-        //amModFreq: 0.5,
+        // amplitude modulation: modulator frequency specified as a ratio
         amDepth: 0.5,
-        
+        // Ratio applied to carrier to produce modulator frequency: modulator = carrier * amRatio
+        // default 0.5 -> carrier:modulator == 2:1
+        amRatio: 0.5,
+
         // FM
-        fmModFreq: 3,
+        // Ratio applied to carrier to produce modulator frequency: modulator = carrier * fmRatio
+        // default 3 -> carrier:modulator == 1:3
+        fmRatio: 3,
         fmIndex: 150,
         
         // LFO
@@ -330,7 +335,9 @@ document.addEventListener("DOMContentLoaded", function(event) {
             'amDepth': 'amDepthLabel',
             'fmIndex': 'fmIndexLabel',
             'lfoFreq': 'lfoFreqLabel',
-            'lfoDepth': 'lfoDepthLabel'
+            'lfoDepth': 'lfoDepthLabel',
+            'amRatio': 'amModFreqLabel',
+            'fmRatio': 'fmModFreqLabel'
         };
         // Add new additive labels
         if (!el && paramName === 'numPartials') el = document.getElementById('numPartialsLabel');
@@ -350,22 +357,53 @@ document.addEventListener("DOMContentLoaded", function(event) {
             // Update parameter value
             synthParams[paramName] = value;
 
-            // Update label display (with formatting for freq/time)
+            // Update label display (with formatting for freq/time and ratios)
             if (labelEl) {
                 if (paramName === 'attackTime' || paramName === 'decayTime') {
-                    labelEl.textContent = value;
+                    labelEl.textContent = value.toFixed(1);
                 } else if (paramName === 'numPartials') {
                     labelEl.textContent = Math.round(value);
-                } else if (paramName === 'amModFreq' || paramName === 'fmModFreq' || paramName === 'lfoFreq') {
+                } else if (paramName === 'amRatio' || paramName === 'fmRatio') {
+                    const mult = value;
+                    let ratioText;
+                    if (mult < 1) {
+                        const denom = Math.round(1 / mult);
+                        ratioText = `${denom}:1 (x${mult.toFixed(2)})`;
+                    } else {
+                        ratioText = `1:${mult.toFixed(2)} (x${mult.toFixed(2)})`;
+                    }
+                    labelEl.textContent = ratioText;
+                } else if (paramName === 'lfoFreq') {
                     labelEl.textContent = value.toFixed(1) + ' Hz';
                 } else if (paramName === 'lfoDepth' || paramName === 'fmIndex' || paramName === 'amDepth') {
-                    labelEl.textContent = value;
+                    labelEl.textContent = value.toString();
+                } else if (paramName === 'partialDecay') {
+                    labelEl.textContent = value.toFixed(2);
                 } else {
                     labelEl.textContent = value.toFixed(2);
                 }
             }
         });
     });
+
+    // Initialize ratio inputs/labels to match synthParams defaults
+    (function initRatioLabels(){
+        function formatRatio(mult) {
+            if (mult < 1) {
+                const denom = Math.round(1 / mult);
+                return `${denom}:1 (x${mult.toFixed(2)})`;
+            }
+            return `1:${mult.toFixed(2)} (x${mult.toFixed(2)})`;
+        }
+        const amRatioInput = document.querySelector('input[name="amRatio"]');
+        const fmRatioInput = document.querySelector('input[name="fmRatio"]');
+        const amRatioLabel = document.getElementById('amModFreqLabel');
+        const fmRatioLabel = document.getElementById('fmModFreqLabel');
+        if (amRatioInput) amRatioInput.value = synthParams.amRatio;
+        if (fmRatioInput) fmRatioInput.value = synthParams.fmRatio;
+        if (amRatioLabel) amRatioLabel.textContent = formatRatio(synthParams.amRatio);
+        if (fmRatioLabel) fmRatioLabel.textContent = formatRatio(synthParams.fmRatio);
+    })();
 
     // Set initial read-only labels that aren't driven by inputs (e.g. maxGain)
     const maxGainLabelEl = document.getElementById('maxGainLabel');
@@ -669,7 +707,7 @@ document.addEventListener("DOMContentLoaded", function(event) {
                 
         carrier.frequency.value = keyboardFrequencyMap[key];
         carrier.type = currentWaveform;
-        modulator.frequency.value = keyboardFrequencyMap[key] * 0.5; // modulator at half the frequency of carrier for audible effect
+        modulator.frequency.value = keyboardFrequencyMap[key] * synthParams.amRatio; // modulator set via amRatio
         modulator.type = currentWaveform;
 
         depth = audioCtx.createGain();
@@ -709,7 +747,7 @@ document.addEventListener("DOMContentLoaded", function(event) {
                 
         carrier.frequency.value = keyboardFrequencyMap[key];
         carrier.type = currentWaveform;
-        modulator.frequency.value = keyboardFrequencyMap[key] * 0.5; // modulator at half the frequency of carrier for audible effect
+        modulator.frequency.value = keyboardFrequencyMap[key] * synthParams.amRatio; // modulator set via amRatio
         modulator.type = currentWaveform;
 
         depth = audioCtx.createGain();
@@ -761,7 +799,7 @@ document.addEventListener("DOMContentLoaded", function(event) {
         carrier.frequency.value = keyboardFrequencyMap[key];
         carrier.type = currentWaveform;
 
-        modulator.frequency.value = keyboardFrequencyMap[key] * 3;
+        modulator.frequency.value = keyboardFrequencyMap[key] * synthParams.fmRatio;
         modulator.type = currentWaveform;
 
         index = audioCtx.createGain();
@@ -800,7 +838,7 @@ document.addEventListener("DOMContentLoaded", function(event) {
         carrier.frequency.value = keyboardFrequencyMap[key];
         carrier.type = currentWaveform;
 
-        modulator.frequency.value = keyboardFrequencyMap[key] * 3;
+        modulator.frequency.value = keyboardFrequencyMap[key] * synthParams.fmRatio;
         modulator.type = currentWaveform;
 
         index = audioCtx.createGain();
