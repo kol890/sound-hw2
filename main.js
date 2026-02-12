@@ -326,6 +326,7 @@ document.addEventListener("DOMContentLoaded", function(event) {
             'sustainLevel': 'sustainLabel',
             'attackTime': 'attackLabel',
             'decayTime': 'decayLabel',
+            'maxGain': 'maxGainLabel',
             'amDepth': 'amDepthLabel',
             'fmIndex': 'fmIndexLabel',
             'lfoFreq': 'lfoFreqLabel',
@@ -365,6 +366,10 @@ document.addEventListener("DOMContentLoaded", function(event) {
             }
         });
     });
+
+    // Set initial read-only labels that aren't driven by inputs (e.g. maxGain)
+    const maxGainLabelEl = document.getElementById('maxGainLabel');
+    if (maxGainLabelEl) maxGainLabelEl.textContent = synthParams.maxGain.toFixed(2);
 
     // Initialize control panel visibility
     updateControlPanelVisibility();
@@ -463,7 +468,14 @@ document.addEventListener("DOMContentLoaded", function(event) {
     // Update normalization gain based on number of active voices to avoid clipping.
     function updateNormalization() {
         const n = Object.keys(activeOscillators).length || 1;
-        const scale = baseMasterGain / Math.max(1, n);
+        // Ensure overall maximum output does not exceed baseMasterGain even if
+        // `synthParams.maxGain` is set high and multiple voices are active.
+        // We compute a normalization scale so that: synthParams.maxGain * scale * n <= baseMasterGain
+        const voices = Math.max(1, n);
+        const desiredPerVoice = Math.max(0.0001, synthParams.maxGain);
+        let scale = baseMasterGain / (desiredPerVoice * voices);
+        // Clamp to a safe 0..1 range
+        scale = Math.min(1, Math.max(0, scale));
         // smooth the change slightly to avoid clicks
         normalizeGain.gain.cancelScheduledValues(audioCtx.currentTime);
         normalizeGain.gain.setTargetAtTime(scale, audioCtx.currentTime, 0.5);
