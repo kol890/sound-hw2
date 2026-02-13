@@ -412,91 +412,6 @@ document.addEventListener("DOMContentLoaded", function(event) {
     // Initialize control panel visibility
     updateControlPanelVisibility();
 
-    // Add listeners for play/stop buttons - EXPERIMENTAL
-    /*const playButton = document.querySelector('#playButton');
-    const stopButton = document.querySelector('#stopButton');
-
-    if (playButton) {
-        playButton.addEventListener('click', () => {
-            if (!simpleOscillator) {
-                const now = audioCtx.currentTime;
-                
-                // Create oscillator, modutor, and gain nodes
-                carrier = audioCtx.createOscillator();
-                modulator = audioCtx.createOscillator();
-                
-                carrier.frequency.value = cFrequency;
-                carrier.type = currentWaveform;
-
-                modulator.frequency.value = cFrequency * 3;
-                modulator.type = currentWaveform;
-
-                index = audioCtx.createGain();
-                index.gain.value = 150;
-
-                
-                modulator.connect(index);
-                index.connect(carrier.frequency);
-
-                //ADSR envelope
-                envelope = audioCtx.createGain();
-                envelope.gain.setValueAtTime(0, now);
-                
-                carrier.connect(envelope);
-                envelope.connect(globalGain);
-
-                // Start the oscillators
-                carrier.start();
-                modulator.start();
-
-                // add LFO
-                var lfo = audioCtx.createOscillator();
-                lfo.frequency.value = 2;
-                lfoGain = audioCtx.createGain();
-                lfoGain.gain.value = 100;
-                lfo.connect(lfoGain).connect(modulator.frequency);
-                lfo.start();
-
-                //ADSR envelope
-                const attackTime = 0.2;
-                const decayTime = 0.3;
-                const sustainLevel = 0.3;
-                const maxGain = 0.4;
-
-                envelope.gain.setTargetAtTime(maxGain, now, attackTime);
-                envelope.gain.setTargetAtTime(sustainLevel, now + attackTime, decayTime);
-
-                playButton.disabled = true;
-                stopButton.disabled = false;
-            }
-        });
-    }
-
-    if (stopButton) {
-        stopButton.addEventListener('click', () => {
-            if (carrier && modulator && envelope) {
-                const now = audioCtx.currentTime;
-                
-                // Release
-                const releaseTime = 0.12;
-                const releaseStartTime = audioCtx.currentTime;
-
-                // Cancel any pending automations (attack/decay) to avoid clicks
-                envelope.gain.cancelScheduledValues(releaseStartTime);
-
-                // Release: linear ramp from current to 0
-                envelope.gain.linearRampToValueAtTime(0, releaseStartTime + releaseTime);
-
-                // Stop oscillator just after release completes
-                modulator.stop(releaseStartTime + releaseTime + 0.01);
-                carrier.stop(releaseStartTime + releaseTime + 0.01);
-                
-                playButton.disabled = false;
-                stopButton.disabled = true;
-            }
-        });
-    } */
-
     // Next we add listeners to the keys. These will add and remove activeOscillators.
     window.addEventListener('keydown', keyDown, false);
     window.addEventListener('keyup', keyUp, false);
@@ -506,14 +421,7 @@ document.addEventListener("DOMContentLoaded", function(event) {
     // Update normalization gain based on number of active voices to avoid clipping.
     function updateNormalization() {
         const n = Object.keys(activeOscillators).length || 1;
-        // Ensure overall maximum output does not exceed baseMasterGain even if
-        // `synthParams.maxGain` is set high and multiple voices are active.
-        // We compute a normalization scale so that: synthParams.maxGain * scale * n <= baseMasterGain
-        const voices = Math.max(1, n);
-        const desiredPerVoice = Math.max(0.0001, synthParams.maxGain);
-        let scale = baseMasterGain / (desiredPerVoice * voices);
-        // Clamp to a safe 0..1 range
-        scale = Math.min(1, Math.max(0, scale));
+        const scale = baseMasterGain / Math.max(1, n);
         // smooth the change slightly to avoid clicks
         normalizeGain.gain.cancelScheduledValues(audioCtx.currentTime);
         normalizeGain.gain.setTargetAtTime(scale, audioCtx.currentTime, 0.5);
