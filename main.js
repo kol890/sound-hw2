@@ -26,6 +26,7 @@ const keyboardFrequencyMap = {
     '85': 987.766602512248223,  //U - B
 }
 
+
 // To start, we initialize an audio context. We setup a gain node, and give ourselves a bit of room to avoid clipping
 document.addEventListener("DOMContentLoaded", function(event) {
 
